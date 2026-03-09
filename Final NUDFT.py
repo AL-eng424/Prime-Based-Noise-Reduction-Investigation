@@ -1,5 +1,3 @@
-# Writters: William Caiels (lines 10-327), Aleksander Jacyno (lines 1-9)
-
 import numpy as np
 import matplotlib.pyplot as plt
 import time
