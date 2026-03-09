@@ -1,7 +1,8 @@
+# Writters: William Caiels (lines 10-327), Aleksander Jacyno (lines 1-9)
+
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from sympy import primerange
 
 # 1. Generate continuous signal, using sum of low frequency sinusoids
 #Need an input for target power, option 1 or 2, and alpha and number of components
@@ -51,11 +52,16 @@ def NUDFT_reconstruction(signal, t, frequencies, return_phase=False):
     frequencies = np.asarray(frequencies)
     
     dt = t[1] - t[0]  # Sampling interval
+    T = len(t) * dt
+
+    tc = t - t.mean()
+
     X = np.zeros(len(frequencies), dtype=complex)
     
     # Compute NUDFT frequency by frequency (memory-efficient)
     for k, f in enumerate(frequencies):
-        X[k] = np.sum(signal * np.exp(-2j * np.pi * f * t)) * dt
+        exponential = np.exp(-2j * np.pi * f * tc)
+        X[k] = np.dot(signal, exponential) * dt / T
 
     if return_phase:
         return np.abs(X), np.angle(X)
@@ -126,9 +132,6 @@ def white_gaussian_noise(t, amplitude):
     return white_noise, current_power_4
 
 
-
-
-
 # 4. Sampling
 # Prime Modulus Sampling
 
@@ -153,6 +156,7 @@ def graph_Csignal_Mspec (t, signal, frequency_grid, X):
     plt.title("Continuous Time-Domain Signal")
     plt.xlabel("Time (s)")
     plt.ylabel("Amplitude")
+    
     plt.grid(True)
     plt.tight_layout()
     plt.show()
@@ -162,14 +166,12 @@ def graph_Csignal_Mspec (t, signal, frequency_grid, X):
     plt.plot(frequency_grid, X)
     plt.title("NUDFT Magnitude Spectrum")
     plt.xlabel("Frequency (Hz)")
-    plt.ylabel("Magnitude")
+    plt.ylabel("Magnitude (Amplitude)")
+    plt.xticks(np.arange(0,51,1))
+    
     plt.grid(True)
     plt.tight_layout()
     plt.show()
-
-
-
-
 
 
 # 6 Matplotlib of Noisy signal and Noisy Magnitude spectrum overlaid with original
@@ -182,6 +184,7 @@ def graph_noisy_vsignal (t, signal, noisy_signal, frequency_grid, X, Y):
     plt.title("Original Signal vs Noisy Signal")
     plt.xlabel("Time")
     plt.ylabel("Amplitude")
+
     plt.grid(True)
     plt.tight_layout()
     plt.show()
@@ -193,10 +196,14 @@ def graph_noisy_vsignal (t, signal, noisy_signal, frequency_grid, X, Y):
     plt.legend()
     plt.title("NUDFT Magnitude Spectrum (Frequency Domain)")
     plt.xlabel("Frequency (Hz)")
-    plt.ylabel("Magnitude")
+    plt.ylabel("Magnitude (Amplitude)")
+    plt.xticks(np.arange(0,51,1))
+    
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
+
 
 #Main section
 if __name__ == "__main__":
@@ -311,8 +318,8 @@ if __name__ == "__main__":
 
     # Working out and printing the difference in power
     relative_noise_power = np.mean((noisy_signal - signal) **2) / np.mean(signal ** 2)
-    print("The relative noise power is", round(relative_noise_power,5))
+    print("The relative noise power is", round(relative_noise_power,4))
 
     # Working out the noise level from the power ratio of noisy signal to signal
     noise_db = 10 *np.log10(relative_noise_power)
-    print("Relative noisy level:", round(noise_db,5), "dB")
+    print("Relative noise level:", round(noise_db,3), "dB")
