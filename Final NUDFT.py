@@ -1,15 +1,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+from sympy import primerange
+# Global Variables, to easily change parameters
+global T
+global f_max
+global fs_cont
+
+T = 5.0
+f_max = 20
+fs_cont = 10000
 
 # 1. Generate continuous signal, using sum of low frequency sinusoids
 #Need an input for target power, option 1 or 2, and alpha and number of components
 def generate_signal(n_components,
                     target_power,
-                    alpha, option,
-                    T = 5.0,
-                    fs_cont = 10000,
-                    f_max = 20):
+                    alpha, option):
     
     t = np.linspace(0, T, int(T*fs_cont), endpoint=False)
 
@@ -140,15 +146,28 @@ def white_gaussian_noise(t, amplitude):
 # Multiple Prime Step Sampling
 
 # Uniform Sampling
+def Uniform_Sampling(fs_sample, noisy_signal, t): # fs_sample input
+    if fs_sample > fs_cont:
+        raise ValueError("Sampling frequency cannot exceed continuous frequency")
+
+    step = int(fs_cont / fs_sample)
+    
+    sampled_signal = noisy_signal [::step]
+    sampled_t = t[::step]
+
+    return sampled_signal, sampled_t
+
+    
 
 # Random Uniform Sampling
 
 # Jittered Uniform Sampling
 
+# 5. Analysis
 
-# 5. Matplotlib of Continuous signal and Magnitude spectrum
+# 6. Matplotlib of Continuous signal and Magnitude spectrum
 def graph_Csignal_Mspec (t, signal, frequency_grid, X):
-        # ---- Plot Time-Domain Signal ----
+        # Plot Time-Domain Signal
     plt.figure(figsize=(20, 4))
     plt.plot(t, signal)
     plt.title("Continuous Time-Domain Signal")
@@ -159,7 +178,7 @@ def graph_Csignal_Mspec (t, signal, frequency_grid, X):
     plt.tight_layout()
     plt.show()
 
-    # ---- Plot Magnitude Spectrum ----
+    # Plot Magnitude Spectrum
     plt.figure(figsize=(20, 4))
     plt.plot(frequency_grid, X)
     plt.title("NUDFT Magnitude Spectrum")
@@ -172,7 +191,7 @@ def graph_Csignal_Mspec (t, signal, frequency_grid, X):
     plt.show()
 
 
-# 6 Matplotlib of Noisy signal and Noisy Magnitude spectrum overlaid with original
+# 7. Matplotlib of Noisy signal and Noisy Magnitude spectrum overlaid with original
 def graph_noisy_vsignal (t, signal, noisy_signal, frequency_grid, X, Y):
     # Plot signal vs noisy signal
     plt.figure(figsize = (20, 4))
@@ -201,12 +220,40 @@ def graph_noisy_vsignal (t, signal, noisy_signal, frequency_grid, X, Y):
     plt.tight_layout()
     plt.show()
 
+# 8. Matplotlib graph for sampled signal and nudft
+def graph_Ssignal_Mspec (sampled_t, sampled_signal, t,
+                                    noisy_signal, frequency_grid, Y, Z):
+    # Plot Sampled Signal
+    plt.figure(figsize = (20, 4))
+    plt.plot(sampled_t, sampled_signal, "r", label = "Sampled Signal")
+    plt.plot(t, noisy_signal, "b", label = "Noisy Signal")
+    plt.legend()
+    plt.title("Sampled Signal vs Noisy Signal")
+    plt.xlabel("Time")
+    plt.ylabel("Amplitude")
+    
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
+    # Plot Magnitude Spectrum
+    plt.figure(figsize=(20, 4))
+    plt.plot(frequency_grid, Z, "r", label = "Sampled Magnitude Spectrum")
+    plt.plot(frequency_grid, Y, "b", label = "Noisy Magnitude Spectrum")
+    plt.legend()
+    plt.title("NUDFT Magnitude Spectrum (Frequency Domain)")
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Magnitude (Amplitude)")
+    plt.xticks(np.arange(0,51,1))
+    
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
 #Main section
 if __name__ == "__main__":
 
-    # ---- Parameters ----
+    # Parameters
     n_components = int(input("Please input the number of components for the sinusoid (recommended 8-12 for moderate complexity) (A realistic signal is 20-50):  "))
     target_power = float(input("Please input target power, recommended 1.0:  "))
     try:
@@ -221,7 +268,7 @@ if __name__ == "__main__":
     
     # Start of timer
     start = time.time()
-    # ---- Generate Signal ----
+    # Generate Signa
     t, signal, current_power = generate_signal(
         n_components,
         target_power,
@@ -305,6 +352,9 @@ if __name__ == "__main__":
         except:
             raise ValueError("Must choose options 0-4")
 
+    if np.array_equal(noisy_signal, signal):
+        raise ValueError("Must choose one of options 0-3 before exiting")
+    
     # Frequency grid for NUDFT
     frequency_grid = np.linspace(0, 50, 3000)
 
@@ -321,3 +371,11 @@ if __name__ == "__main__":
     # Working out the noise level from the power ratio of noisy signal to signal
     noise_db = 10 *np.log10(relative_noise_power)
     print("Relative noise level:", round(noise_db,3), "dB")
+
+    # Unorganised sampling bit of code
+    fs_sample = int(input(("Please input the sample rate for uniform, MUST BE < " + str(fs_cont) + " and >" + str(1/2 * f_max)  + " :  ")))
+    sampled_signal, sampled_t = Uniform_Sampling(fs_sample, noisy_signal, t)
+    frequency_grid = np.linspace(0, 50, 3000)
+    Z = NUDFT_reconstruction(sampled_signal, sampled_t, frequency_grid)
+    graph_Ssignal_Mspec (sampled_t, sampled_signal, t,
+                                    noisy_signal, frequency_grid, Y, Z)
