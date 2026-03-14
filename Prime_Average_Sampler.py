@@ -40,6 +40,7 @@ for n in range(1, num_passes + 1):
 avg_waveform /= num_passes
 
 plt.plot(t, signal, label='Clean Signal')
+plt.plot(t, noisy_signal, label='Noisy Signal')
 plt.plot(t, avg_waveform, label='Averaged Reconstruction')
 plt.legend()
 plt.show()
