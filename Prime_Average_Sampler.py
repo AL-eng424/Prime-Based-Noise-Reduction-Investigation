@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 # Requirements: T_noise < k < T_signal < N
 # For optimum performance, N, k and T_noise should be coprime.
 
-N = 111 # Signal length
-k = 19 # Sample interval
-T_signal = 29 # Signal period
-T_noise = 16 # Noise period
+N = int(input('Input signal length N (recommended: prime number around 111): '))
+k = int(input('Input sample interval k (recommended: prime number around 19): '))
+T_signal = int(input('Input signal period T_signal (recommended: N > T_signal > k, E.G. 29): '))
+T_noise = int(input('Input noise period T_noise (recommended: N > T_signal > k > T_noise, E.G. 16): '))
 
 t = np.linspace(0, N, N, endpoint=False)
 signal = np.sin(t * 2 * np.pi / T_signal)
