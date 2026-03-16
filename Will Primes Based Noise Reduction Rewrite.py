@@ -1,3 +1,8 @@
+# IMPORTANT
+# Out of date code, go to final NUDFT for updated code
+
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 import time
