@@ -2,7 +2,7 @@
 # or something else it shows you the frequency and magnitude
 # Remove the wavelength thing
 # Write more of the sampling functions
-# Write more analysis functions5
+# Write more analysis functions
 # Once finished rewrite main section for monte carlo analysis
 
 
