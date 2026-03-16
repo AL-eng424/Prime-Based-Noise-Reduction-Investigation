@@ -10,6 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from sympy import primerange
+
+
 # Global Variables, to easily change parameters
 global T
 global f_max
