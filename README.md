@@ -129,7 +129,7 @@ The repository currently contains **two separate prototypes**:
 
 They are not yet integrated but can be run independently to demonstrate each part of the project.
 
-Future work may include integrating the sampling algorithm into the NUDFT pipeline and exploring additional sampling strategies.
+Future work may include integrating the sampling algorithm into the NUDFT pipeline and exploring additional sampling strategies and additional analysis methods for the different sampling stratergies.
 
 ---
 
@@ -141,5 +141,5 @@ Python packages used in this project:
 numpy
 matplotlib
 time
-primerange from sympy (Not currently used, but will be used to get all primes in a range)
+primerange from sympy (Not currently used, but will be used to get all primes in a range, useful for a type of prime smapling)
 ```
