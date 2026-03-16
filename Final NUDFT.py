@@ -1,3 +1,11 @@
+# Next thing to implement, list of all frequencies with their magnitude, so when you click on peak / 
+# or something else it shows you the frequency and magnitude
+# Remove the wavelength thing
+# Write more of the sampling functions
+# Write more analysis functions5
+# Once finished rewrite main section for monte carlo analysis
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -9,17 +17,18 @@ global fs_cont
 
 T = 5.0
 f_max = 20
-fs_cont = 10000
+fs_cont = 100000
+
 
 # 1. Generate continuous signal, using sum of low frequency sinusoids
 #Need an input for target power, option 1 or 2, and alpha and number of components
 def generate_signal(n_components,
                     target_power,
-                    alpha, option):
+                    alpha, option, min_freq):
     
     t = np.linspace(0, T, int(T*fs_cont), endpoint=False)
 
-    frequencies = np.random.uniform(1, f_max, n_components)
+    frequencies = np.random.uniform(min_freq , f_max, n_components)
     phases = np.random.uniform(0, 2*np.pi, n_components)
 
     if option == 1:
@@ -27,11 +36,9 @@ def generate_signal(n_components,
         amplitudes= np.random.uniform(0.5, 1.0, n_components)
 
     elif option ==2:
-        # Spectral decay amplitudes
-        amplitudes = 1 / (frequencies ** alpha)
-
         # Slight randomness to avoid perfectly deterministic structure
-        amplitudes = 1 / (frequencies ** alpha) * np.random.uniform(0.9, 1.1, n_components)
+        decay_factor = frequencies ** alpha
+        amplitudes =np.random.uniform(0.9, 1.1, n_components) / decay_factor
 
     else:
         raise ValueError("option must be 1 (flat) or 2 (spectral decay)")
@@ -67,10 +74,15 @@ def NUDFT_reconstruction(signal, t, frequencies, return_phase=False):
         exponential = np.exp(-2j * np.pi * f * tc)
         X[k] = np.dot(signal, exponential) * dt / T
 
+    magnitude = np.abs(X)
+
+    if len(magnitude) > 1:
+        magnitude [1:] *= 2
+        
     if return_phase:
-        return np.abs(X), np.angle(X)
+        return magnitude , np.angle(X)
     else:
-        return np.abs(X)
+        return magnitude
 
 
 # 3. Defining noise
@@ -79,27 +91,34 @@ def wavelength_in_samples(fs_cont, frequency):
     
     return (wavelength)
 def low_freq_sin_noise(t, amplitude,
-                                   frequency, T = 5.0,
-                                   fs_cont = 10000):
+                                   frequency, target_power,
+                                   T = 5.0, fs_cont = 10000):
 
     low_freq_sin = amplitude * np.sin(2 * np.pi * frequency * t + 0)
 
     # Works out power, so that we can compare how closely it gets back to original power
     current_power_1 = np.mean(low_freq_sin**2)
 
+    # Normalises_noise
+    low_freq_sin *= np.sqrt(target_power / current_power_1)
+    current_power_1 = np.mean(low_freq_sin ** 2)
+    
     # Call function to work out wavelength
     wavelength_1 = wavelength_in_samples(fs_cont, frequency)
 
     return low_freq_sin, current_power_1, wavelength_1
 
 def high_freq_sin_noise(t, amplitude,
-                                   frequency, T = 5.0,
-                                   fs_cont = 10000):
+                                   frequency, target_power,
+                                   T = 5.0, fs_cont = 10000):
     
     high_freq_sin = amplitude * np.sin(2 * np.pi * frequency * t + 0)
 
     # Works out power, so that we can compare how closely it gets back to original power
-    current_power_2 = np.mean(high_freq_sin**2)
+    current_power_2 = np.mean(high_freq_sin ** 2)
+    # Normalises noise
+    high_freq_sin *= np.sqrt(target_power / current_power_2)
+    current_power_2 = np.mean(high_freq_sin ** 2)
     
     # Call function to work out wavelength
     wavelength_2 = wavelength_in_samples(fs_cont, frequency)
@@ -110,7 +129,7 @@ def multi_tone_sin_noise(t, amplitude_min,
                                    amplitude_max,
                                    frequency_min,
                                    frequency_max, num_sin,
-                                   T = 5.0, fs_cont = 10000):
+                                   target_power, T = 5.0, fs_cont = 10000):
 
     amplitudes = np.random.uniform(amplitude_min, amplitude_max, num_sin)
     frequencies = np.random.uniform(frequency_min, frequency_max, num_sin)
@@ -122,16 +141,23 @@ def multi_tone_sin_noise(t, amplitude_min,
 
     # Works out power, so that we can compare how closely it gets back to original power
     current_power_3 = np.mean(multi_tone_sin**2)
-
+    # Normalises noise
+    multi_tone_sin *= np.sqrt(target_power / current_power_3)
+    current_power_3 = np.mean(multi_tone_sin ** 2)
+    
     return multi_tone_sin, current_power_3
 
                            
 # Acts as the control
-def white_gaussian_noise(t, amplitude):
+def white_gaussian_noise(t, amplitude, target_power):
     white_noise = amplitude * np.random.randn(len(t))
 
     # Works out power, so that we can compare how closely it gets back to original power
-    current_power_4 = np.mean(white_noise**2)
+    current_power_4 = np.mean(white_noise ** 2)
+
+    # Normalises_noise
+    white_noise *= np.sqrt(target_power / current_power_4)
+    current_power_4 = np.mean(white_noise ** 2)
 
     return white_noise, current_power_4
 
@@ -150,14 +176,13 @@ def Uniform_Sampling(fs_sample, noisy_signal, t): # fs_sample input
     if fs_sample > fs_cont:
         raise ValueError("Sampling frequency cannot exceed continuous frequency")
 
-    step = int(fs_cont / fs_sample)
+    step = round(fs_cont / fs_sample)
     
     sampled_signal = noisy_signal [::step]
     sampled_t = t[::step]
 
     return sampled_signal, sampled_t
 
-    
 
 # Random Uniform Sampling
 
@@ -184,7 +209,7 @@ def graph_Csignal_Mspec (t, signal, frequency_grid, X):
     plt.title("NUDFT Magnitude Spectrum")
     plt.xlabel("Frequency (Hz)")
     plt.ylabel("Magnitude (Amplitude)")
-    plt.xticks(np.arange(0,51,1))
+    plt.xticks(np.arange(0, 51, 1))
     
     plt.grid(True)
     plt.tight_layout()
@@ -214,7 +239,7 @@ def graph_noisy_vsignal (t, signal, noisy_signal, frequency_grid, X, Y):
     plt.title("NUDFT Magnitude Spectrum (Frequency Domain)")
     plt.xlabel("Frequency (Hz)")
     plt.ylabel("Magnitude (Amplitude)")
-    plt.xticks(np.arange(0,51,1))
+    plt.xticks(np.arange(0, 51, 1))
     
     plt.grid(True)
     plt.tight_layout()
@@ -222,8 +247,8 @@ def graph_noisy_vsignal (t, signal, noisy_signal, frequency_grid, X, Y):
 
 # 8. Matplotlib graph for sampled signal and nudft
 def graph_Ssignal_Mspec (sampled_t, sampled_signal, t,
-                                    noisy_signal, frequency_grid, Y, Z):
-    # Plot Sampled Signal
+                                    noisy_signal, signal, frequency_grid, Y, Z, X):
+    # Plot Sampled Signal v Noisy Signal
     plt.figure(figsize = (20, 4))
     plt.plot(sampled_t, sampled_signal, "r", label = "Sampled Signal")
     plt.plot(t, noisy_signal, "b", label = "Noisy Signal")
@@ -236,8 +261,20 @@ def graph_Ssignal_Mspec (sampled_t, sampled_signal, t,
     plt.tight_layout()
     plt.show()
 
-    # Plot Magnitude Spectrum
-    plt.figure(figsize=(20, 4))
+    # Plot Sampled Signal v Original Signal
+    plt.figure(figsize = (20, 4))
+    plt.plot(sampled_t, sampled_signal, "r", label = "Sampled Signal")
+    plt.plot(t, signal, "b", label = "Original Signal")
+    plt.legend()
+    plt.title("Sampled Signal vs Original Signal")
+    plt.xlabel("Amplitude")
+
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+    
+    # Plot Sampled Magnitude Spectrum vs Noisy Magnitude Spectrum
+    plt.figure(figsize = (20, 4))
     plt.plot(frequency_grid, Z, "r", label = "Sampled Magnitude Spectrum")
     plt.plot(frequency_grid, Y, "b", label = "Noisy Magnitude Spectrum")
     plt.legend()
@@ -250,12 +287,27 @@ def graph_Ssignal_Mspec (sampled_t, sampled_signal, t,
     plt.tight_layout()
     plt.show()
 
-#Main section
+    # Plot Sampled Magnitude Spectrum vs Original Manigutde Spectrum
+    plt.figure(figsize = (20, 4))
+    plt.plot(frequency_grid, Z, "r", label = "Sampled Magnitude Spectrum")
+    plt.plot(frequency_grid, X, "b", label = "Original Magnitude Spectrum")
+    plt.legend()
+    plt.title("NUDFT Magnitude Spectrum (Frequency Domain)")
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Magnitude (Amplitude)")
+    plt.xticks(np.arange(0,51,1))
+    
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+# Main section
 if __name__ == "__main__":
 
     # Parameters
-    n_components = int(input("Please input the number of components for the sinusoid (recommended 8-12 for moderate complexity) (A realistic signal is 20-50):  "))
+    n_components = int(input("Please input the number of components for the sinusoid (recommended 8-20 for moderate complexity) (A realistic signal is 20-50):  "))
     target_power = float(input("Please input target power, recommended 1.0:  "))
+    min_freq = float(input("Please input the minimum frequency, 1 / T = " + str(1/T) + ":  "))
     try:
         option = int(input("Please input 1 = flat amplitudes, 2 = spectral decay:  "))
     except:
@@ -268,11 +320,10 @@ if __name__ == "__main__":
     
     # Start of timer
     start = time.time()
-    # Generate Signa
+    # Generate Signal
     t, signal, current_power = generate_signal(
-        n_components,
-        target_power,
-        alpha, option)
+        n_components, target_power,
+        alpha, option, min_freq)
 
     # Frequency grid for NUDFT
     frequency_grid = np.linspace(0, 50, 3000)
@@ -287,7 +338,7 @@ if __name__ == "__main__":
 
     # Prints out the noise level
     current_power = round(current_power, 5)
-    print("The power level is currently",current_power)
+    print("The power level is currently", current_power)
 
     # Works out length of time and prints it, helps to work out efficiency
     length = end - start
@@ -312,8 +363,9 @@ if __name__ == "__main__":
             if noise_opt == 0:
                 amplitude = float(input("Please input an amplitude, recommended 0.2 - 0.4:  "))
                 frequency = float(input("Please input a frequency, recommended 0.5 - 1 Hz:  "))
-
-                noise, _ , wavelength_1 = low_freq_sin_noise(t, amplitude, frequency)
+                target_power = float(input("Please input target power, recommended 0.01:  "))
+                
+                noise, _ , wavelength_1 = low_freq_sin_noise(t, amplitude, frequency, target_power)
                 noisy_signal += noise
 
                 print("Wavelength is", round(wavelength_1, 3), "samples / wavelength")
@@ -321,8 +373,9 @@ if __name__ == "__main__":
             elif noise_opt == 1:
                 amplitude = float(input("Please input an amplitude, recommended 0.2 - 0.4:  "))
                 frequency = float(input("Please input a frequency, recommended 25 - 40 Hz:  "))
-                
-                noise, _ , wavelength_2 = high_freq_sin_noise(t, amplitude, frequency)
+                target_power = float(input("Please input target power, recommended 0.01:  "))
+
+                noise, _ , wavelength_2 = high_freq_sin_noise(t, amplitude, frequency, target_power)
                 noisy_signal += noise
 
                 print("Wavelength is", round(wavelength_2, 3), "samples / wavelength")
@@ -333,11 +386,12 @@ if __name__ == "__main__":
                 frequency_min = float(input("Please input a minimum frequency, recommended 25 Hz:  "))
                 frequency_max = float(input("Please input a maximum frequency, recommended 40Hz:  "))
                 num_sin = int(input("Please input the number of sin waves added as noise:  "))
+                target_power = float(input("Please input target power, recommended 0.01:  "))
 
                 noise, _ = multi_tone_sin_noise(t, amplitude_min,
                                                                 amplitude_max,
                                                                 frequency_min,
-                                                                frequency_max, num_sin)
+                                                                frequency_max, num_sin, target_power)
                 noisy_signal += noise
 
                 print("Wavelength can't be worked outer here (sum of multiple sine waves)")
@@ -345,8 +399,9 @@ if __name__ == "__main__":
             elif noise_opt == 3:
                 # Recommended to be amplitude 0.2
                 amplitude = float(input("Please input a float, recommended 0.2:  "))
+                target_power = float(input("Please input target power, recommended 0.01:  "))
                 
-                noise, _ = white_gaussian_noise(t, amplitude)
+                noise, _ = white_gaussian_noise(t, amplitude, target_power)
                 noisy_signal += noise
 
         except:
@@ -364,18 +419,30 @@ if __name__ == "__main__":
     # Call Graph for noisy signal and Magnitude spectrum
     graph_noisy_vsignal (t, signal, noisy_signal, frequency_grid, X, Y)
 
-    # Working out and printing the difference in power
+    # Working out and printing the relative noise power
     relative_noise_power = np.mean((noisy_signal - signal) **2) / np.mean(signal ** 2)
-    print("The relative noise power is", round(relative_noise_power,4))
+    print("The relative noise power is", round(relative_noise_power, 5))
 
     # Working out the noise level from the power ratio of noisy signal to signal
     noise_db = 10 *np.log10(relative_noise_power)
-    print("Relative noise level:", round(noise_db,3), "dB")
+    print("Relative noise level:", round(noise_db, 5), "dB")
+
+    # Working out and printing the noise power and current signal power
+    noise_power = np.mean((signal - noisy_signal) ** 2)
+    print("The power in the noise is", round(noise_power, 5))
+          
+    noisy_signal_power = np.mean(noisy_signal ** 2)
+    print("The current noisy signal power is", round(noisy_signal_power, 5))
 
     # Unorganised sampling bit of code
-    fs_sample = int(input(("Please input the sample rate for uniform, MUST BE < " + str(fs_cont) + " and >" + str(1/2 * f_max)  + " :  ")))
+    fs_sample = int(input(("Please input the sample rate for uniform, MUST BE > 2 * max frequency and < " + str(fs_cont) +  " :  ")))
     sampled_signal, sampled_t = Uniform_Sampling(fs_sample, noisy_signal, t)
     frequency_grid = np.linspace(0, 50, 3000)
     Z = NUDFT_reconstruction(sampled_signal, sampled_t, frequency_grid)
     graph_Ssignal_Mspec (sampled_t, sampled_signal, t,
-                                    noisy_signal, frequency_grid, Y, Z)
+                                    noisy_signal, signal, frequency_grid, Y, Z, X)
+
+    sampled_power = np.mean(sampled_signal ** 2)
+    print("The sampled_power is", round(sampled_power, 5))
+
+
