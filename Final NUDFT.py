@@ -2,7 +2,7 @@
 # or something else it shows you the frequency and magnitude
 # Remove the wavelength thing
 # Write more of the sampling functions
-# Write more analysis functions
+# Write more analysis functions5
 # Once finished rewrite main section for monte carlo analysis
 
 
@@ -10,16 +10,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from sympy import primerange
-
-
 # Global Variables, to easily change parameters
+# Do this for all inputs? (most likely better if we want to do monte carlo runs)
 global T
 global f_max
 global fs_cont
 
 T = 5.0
 f_max = 20
-fs_cont = 100000
+fs_cont = 10000
 
 
 # 1. Generate continuous signal, using sum of low frequency sinusoids
@@ -174,7 +173,7 @@ def white_gaussian_noise(t, amplitude, target_power):
 # Multiple Prime Step Sampling
 
 # Uniform Sampling
-def Uniform_Sampling(fs_sample, noisy_signal, t): # fs_sample input
+def Uniform_Sampling(fs_sample, noisy_signal, t, option): # fs_sample input
     if fs_sample > fs_cont:
         raise ValueError("Sampling frequency cannot exceed continuous frequency")
 
@@ -186,7 +185,22 @@ def Uniform_Sampling(fs_sample, noisy_signal, t): # fs_sample input
     return sampled_signal, sampled_t
 
 
-# Random Uniform Sampling
+# Random Sampling
+def Random_Sampling(fs_sample, noisy_signal, t):
+    if fs_sample > fs_cont:
+        raise ValueError("Sampling frequency cannot exceed continuous frequency")
+
+    n_samples = int(fs_sample * T)
+
+    indicies = np.sort(np.random.choice(len(t), n_samples, replace = False))
+
+    sampled_signal = noisy_signal[indicies]
+    sampled_t = t[indicies] # In case we want to use this later to see where it sampled
+
+    return sampled_signal, sampled_t
+    
+
+# Random interval sampling
 
 # Jittered Uniform Sampling
 
@@ -436,15 +450,37 @@ if __name__ == "__main__":
     noisy_signal_power = np.mean(noisy_signal ** 2)
     print("The current noisy signal power is", round(noisy_signal_power, 5))
 
-    # Unorganised sampling bit of code
-    fs_sample = int(input(("Please input the sample rate for uniform, MUST BE > 2 * max frequency and < " + str(fs_cont) +  " :  ")))
-    sampled_signal, sampled_t = Uniform_Sampling(fs_sample, noisy_signal, t)
-    frequency_grid = np.linspace(0, 50, 3000)
-    Z = NUDFT_reconstruction(sampled_signal, sampled_t, frequency_grid)
-    graph_Ssignal_Mspec (sampled_t, sampled_signal, t,
-                                    noisy_signal, signal, frequency_grid, Y, Z, X)
+    # Sampling
+    noise_opt = 0
+    while noise_opt != 4:
+        fs_sample = int(input(("Please input the sample rate for uniform, MUST BE > 2 * max frequency and < " + str(fs_cont) +  " :  ")))
+        noise_opt = int(input("Input noise you want, (4 stops sampling) (0 =  Uniform sampling) (1 =  Random sampling):  ") )
+        
+        try:
+            if noise_opt == 0:
+                 sampled_signal, sampled_t = Uniform_Sampling(fs_sample, noisy_signal, t)
 
-    sampled_power = np.mean(sampled_signal ** 2)
-    print("The sampled_power is", round(sampled_power, 5))
+            elif noise_opt == 1:
+                sampled_signal, sampled_t = Random_Sampling(fs_sample, noisy_signal, t)
+                
+        except:
+            raise ValueError("Must choose options 0 - 4")
+
+   
+        frequency_grid = np.linspace(0, 50, 3000)
+        Z = NUDFT_reconstruction(sampled_signal, sampled_t, frequency_grid)
+        graph_Ssignal_Mspec (sampled_t, sampled_signal, t,
+                                        noisy_signal, signal, frequency_grid, Y, Z, X)
+
+        sampled_power = np.mean(sampled_signal ** 2)
+        print("The sampled_power is", round(sampled_power, 5))
+
+
+
+
+
+
+
+
 
 
