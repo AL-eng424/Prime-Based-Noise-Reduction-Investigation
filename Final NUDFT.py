@@ -203,6 +203,41 @@ def Random_Sampling(fs_sample, noisy_signal, t):
     
 
 # Random interval sampling
+def Random_interval_sampling(min_fs, max_fs, fs_cont, noisy_signal, t):
+    if max_fs > fs_cont:
+        raise ValueError("Sampling frequency cannot exceed continuous frequency")
+
+    if min_fs <= 0 or max_fs <= 0:
+        raise ValueError("Sampling frequencies must be positive")
+
+    if min_fs > max_fs:
+        raise ValueError("min_fs must be smaller than max_fs")
+
+    max_step = int(np.floor(fs_cont / max_fs))
+    min_step = int(np.ceil(fs_cont / min_fs))
+
+    if max_step > min_step:
+        raise ValueError("Invalid step bounds")
+    
+    indicies = []
+    i = 0
+
+    while i < len(t):
+        indicies.append(i)
+    
+        fs_random = np.random.uniform(min_fs, max_fs)
+        step = int(fs_cont / fs_random)
+    
+        i += step
+
+    sampled_signal = noisy_signal[indicies]
+    indicies = np.array(indicies)
+    sampled_t = t[indicies]
+
+    average_fs = len(indicies) / T
+
+    return sampled_signal, sampled_t, indicies, average_fs
+    
 
 # Jittered Uniform Sampling
 
@@ -455,16 +490,24 @@ if __name__ == "__main__":
     # Sampling
     noise_opt = 0
     while noise_opt != 4:
-        fs_sample = int(input(("Please input the sample rate for uniform, MUST BE > 2 * max frequency and < " + str(fs_cont) +  " :  ")))
-        option = int(input("Input sampling you want, (4 stops sampling) (0 =  Uniform sampling) (1 =  Random sampling):  ") )
+        option = int(input("Input sampling you want, (4 stops sampling) (0 =  Uniform sampling) (1 =  Random sampling) (2 = Random interval sampling):  ") )
         
         try:
             if option == 0:
-                 sampled_signal, sampled_t, indicies = Uniform_Sampling(fs_sample, noisy_signal, t)
+                fs_sample = int(input(("Please input the sample rate, MUST BE > 2 * max frequency and < " + str(fs_cont) +  " (won't affect random interval sampling):  ")))
+                sampled_signal, sampled_t, indicies = Uniform_Sampling(fs_sample, noisy_signal, t)
 
             elif option == 1:
+                fs_sample = int(input(("Please input the sample rate, MUST BE > 2 * max frequency and < " + str(fs_cont) +  " (won't affect random interval sampling):  ")))
                 sampled_signal, sampled_t, indicies = Random_Sampling(fs_sample, noisy_signal, t)
 
+            elif option == 2:
+                min_fs = float(input("Please input the minimum sampling rate:  "))
+                max_fs = float(input("Please input the maximum sampling rate:  "))
+                sampled_signal, sampled_t, indicies, average_fs = Random_interval_sampling(min_fs, max_fs, fs_cont, noisy_signal, t)
+
+                print("The average sampling rate is", average_fs)
+                
             elif option == 4:
                 break
             
