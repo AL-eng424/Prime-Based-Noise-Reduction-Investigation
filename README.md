@@ -141,5 +141,5 @@ Python packages used in this project:
 numpy
 matplotlib
 time
-primerange from sympy (Not currently used, but will be used to get all primes in a range, useful for a type of prime smapling)
+primerange from sympy (Not currently used, but will be used later)
 ```
