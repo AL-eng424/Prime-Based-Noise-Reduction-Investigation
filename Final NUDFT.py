@@ -173,13 +173,13 @@ def white_gaussian_noise(t, amplitude, target_power):
 # Multiple Prime Step Sampling
 
 # Uniform Sampling
-def Uniform_Sampling(fs_sample, noisy_signal, t, option): # fs_sample input
+def Uniform_Sampling(fs_sample, noisy_signal, t): # fs_sample input
     if fs_sample > fs_cont:
         raise ValueError("Sampling frequency cannot exceed continuous frequency")
 
     step = round(fs_cont / fs_sample)
 
-    indicies = np.arrange(0,  len(t), step)
+    indicies = np.arange(0,  len(t), step)
     
     sampled_signal = noisy_signal [indicies]
     sampled_t = t[indicies]
@@ -456,13 +456,13 @@ if __name__ == "__main__":
     noise_opt = 0
     while noise_opt != 4:
         fs_sample = int(input(("Please input the sample rate for uniform, MUST BE > 2 * max frequency and < " + str(fs_cont) +  " :  ")))
-        noise_opt = int(input("Input noise you want, (4 stops sampling) (0 =  Uniform sampling) (1 =  Random sampling):  ") )
+        option = int(input("Input sampling you want, (4 stops sampling) (0 =  Uniform sampling) (1 =  Random sampling):  ") )
         
         try:
-            if noise_opt == 0:
+            if option == 0:
                  sampled_signal, sampled_t, indicies = Uniform_Sampling(fs_sample, noisy_signal, t)
 
-            elif noise_opt == 1:
+            elif option == 1:
                 sampled_signal, sampled_t, indicies = Random_Sampling(fs_sample, noisy_signal, t)
 
             elif option == 4:
@@ -480,13 +480,13 @@ if __name__ == "__main__":
         # Work out the sampled noise and percentage reduction
 
         sampled_power = np.mean(sampled_signal ** 2)
-        print("The sampled_power is", round(sampled_power, 5))
+        print("The sampled power is", round(sampled_power, 5))
 
 
         sampled_noise_power = np.mean((signal[indicies] - sampled_signal) ** 2)
         print("The power in the noise is", round(sampled_noise_power, 5))
 
         percent_reduction_noise = sampled_noise_power / noise_power
-        print("The percentage reduction is", round(percent_reduction_noise, 5))
+        print("The percentage of noise left is", round(percent_reduction_noise, 5))
 
 
