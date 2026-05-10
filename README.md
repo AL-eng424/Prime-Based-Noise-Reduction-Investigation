@@ -129,7 +129,7 @@ The repository currently contains **two separate prototypes**:
 
 They are not yet integrated but can be run independently to demonstrate each part of the project.
 
-Future work may include integrating the sampling algorithm into the NUDFT pipeline and exploring additional sampling strategies and additional analysis methods for the different sampling stratergies.
+Future work may include integrating the sampling algorithm into the NUDFT pipeline and exploring additional sampling strategies as well as additional analysis methods for the different sampling stratergies.
 
 ---
 
