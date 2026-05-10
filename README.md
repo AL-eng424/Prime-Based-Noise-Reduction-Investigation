@@ -52,10 +52,10 @@ Several noise types can be added interactively:
 
 The script visualises:
 
-* the original signal
-* the noisy signal
-* sampled signals
-* magnitude spectra from the NUDFT
+* The riginal signal
+* The noisy signal
+* Sampled signals
+* Magnitude Spectra from the NUDFT
 
 Run with:
 
