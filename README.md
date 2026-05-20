@@ -141,5 +141,6 @@ Python packages used in this project:
 numpy
 matplotlib
 time
-primerange from sympy (Not currently used, but will be used later)
+primerange from sympy
+scipy.fft
 ```
