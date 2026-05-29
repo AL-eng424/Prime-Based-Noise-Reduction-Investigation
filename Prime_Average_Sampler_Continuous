@@ -2,91 +2,129 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sympy import isprime
 
+# Global parameters
+T = 1.0 # Time
+fs_cont = 10000 # Uniform sampling rate
+f_max = 20 # Max frequency
+min_freq = 1 
+n_components = 50 
+target_power = 1 
+option = 2 
+alpha = 1.5
+
 '''FUNCTIONS'''
 
-def make_signal(t):
-    return np.sin(2*np.pi*t/45)
+def make_signal():
+    t_vec = np.linspace(0, T, int(T*fs_cont), endpoint=False)
+
+    frequencies = np.random.uniform(min_freq , f_max, n_components)
+    phases = np.random.uniform(0, 2*np.pi, n_components)
+
+    if option == 1:
+        amplitudes = np.random.uniform(0.5, 1.0, n_components)
+    elif option == 2:
+        decay_factor = frequencies ** alpha
+        amplitudes = np.random.uniform(0.9, 1.1, n_components) / decay_factor
+    else:
+        raise ValueError("option must be 1 (flat) or 2 (spectral decay)")
+
+    signal = np.zeros_like(t_vec)
+    for A, f, phi in zip(amplitudes, frequencies, phases):
+        signal += A * np.sin(2 * np.pi * f * t_vec + phi)
+
+    current_power = np.mean(signal**2)
+    signal *= np.sqrt(target_power / current_power)
+    return signal
 
 def noise(signal):
-    t = np.arange(len(signal))
-    return np.sin(2*np.pi*t/4)
+    t_vec = np.arange(len(signal))
+    return 5 * np.sin(2*np.pi*t_vec/100)
 
 def sample(noisy_signal, k):
+    t_full = np.arange(len(noisy_signal))
+    t_samples = t_full[::k]
     samples = noisy_signal[::k]
-    t = np.arange(len(noisy_signal))
-    t_samples = t[::k]
-    return np.interp(t, t_samples, samples)
+    return np.interp(t_full, t_samples, samples)
 
-def sample_and_reconstruct(noisy_signal, k, amplitude): # k is the sample interval
-    # Sample signal and average
+def sample_and_reconstruct(noisy_signal, k, n, l): 
     chunks = sample(noisy_signal, k).reshape(n, l)
     reconstructed = np.mean(chunks, axis=0)
-
     return reconstructed
 
 '''MAIN'''
 
 # 1 - Prepare signal for transmission
+signal = make_signal()
+l = len(signal) # 50,000 length
 
-l = 90 # Encoded signal loop length
-t = np.arange(l) # Time vector
-signal = make_signal(t)
-
-n = 4 # Number of retransmissions
-repeated_signal = np.tile(signal, n)
+t = np.arange(l) 
+n = 100 # Number of retransmissions
+repeated_signal = np.tile(signal, n) # 5,000,000 length
 
 noisy_signal = repeated_signal + noise(repeated_signal)
 
 # 2 - Receive and decode signal
-
 noise_powers = np.array([])
 
 plt.ion()
+fig, ax = plt.subplots(figsize=(20, 5)) # Wider layout for dense data
 
-fig, ax = plt.subplots()
+k_max = 100
+value_k_best = 0
+value_noise_best = 0
 
-for k in range(1, l+1): # Interactive plot
-
-    reconstructed = sample_and_reconstruct(noisy_signal, k, amplitude=1)
+for k in range(1, k_max + 1): 
+    
+    reconstructed = sample_and_reconstruct(noisy_signal, k, n, l)
 
     noise_power = np.mean((reconstructed - signal) ** 2)
-    print(noise_power)
+    print(f"k={k}, Noise Power={noise_power}")
+
+    if k == 1:
+        value_k_best = 1
+        value_noise_best = noise_power
+
+    elif value_noise_best > noise_power:
+        value_k_best = k
+        value_noise_best = noise_power
+
 
     noise_powers = np.append(noise_powers, noise_power)
 
-    # Clear previous frame
     ax.clear()
-
-    # Replot
-    ax.plot(t, reconstructed, label=f"k={k}")
-    ax.plot(t, signal, label="original signal", linestyle='dashed')
-    ax.plot(t, noisy_signal[:l], label="noisy signal", linestyle='dotted')
-
-    ax.legend()
-
-    # Redraw figure
+    
+    # Visualises all 50,000 data points 
+    ax.plot(t, reconstructed, label=f"k={k}", linewidth=1)
+    ax.plot(t, signal, label="Original Signal", linestyle='dashed', linewidth=1.5)
+    ax.plot(t, noisy_signal[:l], label="Noisy Signal Input", linestyle='dotted', alpha=0.3, linewidth=0.5)
+    
+    ax.set_title(f"Reconstructed Signal (Full {l} Points)")
+    ax.set_xlabel("Sample Index")
+    ax.set_ylabel("Amplitude")
+    ax.legend(loc="upper right")
+    
     plt.draw()
+    plt.pause(0.05)
 
-    # Tiny pause so GUI updates
-    plt.pause(0.01)
 
 plt.ioff()
 plt.show()
 
+print(value_k_best, "Had the greatest reduction with a noise value of", value_noise_best)
 # 3 - Plot results
+fig2, ax2 = plt.subplots()
+ax2.plot(range(1, k_max+1), noise_powers, label="Noise Powers", marker='o')
 
-plt.plot(range(1, l+1), noise_powers, label="noise_powers")
-
-# Prime markers
 prime_x = []
 prime_y = []
-
-for k in range(1, l+1):
+for k in range(1, k_max+1):
     if isprime(k):
         prime_x.append(k)
         prime_y.append(noise_powers[k-1])
 
-plt.scatter(prime_x, prime_y, color='red', s=15, label='prime k')
-
-plt.legend()
+ax2.scatter(prime_x, prime_y, color='red', s=50, zorder=3, label='Prime k Values')
+ax2.set_title("Reconstruction Error vs. Sampling Interval (k)")
+ax2.set_xlabel("Sampling Interval (k)")
+ax2.set_ylabel("Mean Squared Error")
+ax2.legend()
 plt.show()
