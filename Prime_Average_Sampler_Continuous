@@ -1,0 +1,92 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sympy import isprime
+
+'''FUNCTIONS'''
+
+def make_signal(t):
+    return np.sin(2*np.pi*t/45)
+
+def noise(signal):
+    t = np.arange(len(signal))
+    return np.sin(2*np.pi*t/4)
+
+def sample(noisy_signal, k):
+    samples = noisy_signal[::k]
+    t = np.arange(len(noisy_signal))
+    t_samples = t[::k]
+    return np.interp(t, t_samples, samples)
+
+def sample_and_reconstruct(noisy_signal, k, amplitude): # k is the sample interval
+    # Sample signal and average
+    chunks = sample(noisy_signal, k).reshape(n, l)
+    reconstructed = np.mean(chunks, axis=0)
+
+    return reconstructed
+
+'''MAIN'''
+
+# 1 - Prepare signal for transmission
+
+l = 90 # Encoded signal loop length
+t = np.arange(l) # Time vector
+signal = make_signal(t)
+
+n = 4 # Number of retransmissions
+repeated_signal = np.tile(signal, n)
+
+noisy_signal = repeated_signal + noise(repeated_signal)
+
+# 2 - Receive and decode signal
+
+noise_powers = np.array([])
+
+plt.ion()
+
+fig, ax = plt.subplots()
+
+for k in range(1, l+1): # Interactive plot
+
+    reconstructed = sample_and_reconstruct(noisy_signal, k, amplitude=1)
+
+    noise_power = np.mean((reconstructed - signal) ** 2)
+    print(noise_power)
+
+    noise_powers = np.append(noise_powers, noise_power)
+
+    # Clear previous frame
+    ax.clear()
+
+    # Replot
+    ax.plot(t, reconstructed, label=f"k={k}")
+    ax.plot(t, signal, label="original signal", linestyle='dashed')
+    ax.plot(t, noisy_signal[:l], label="noisy signal", linestyle='dotted')
+
+    ax.legend()
+
+    # Redraw figure
+    plt.draw()
+
+    # Tiny pause so GUI updates
+    plt.pause(0.01)
+
+plt.ioff()
+plt.show()
+
+# 3 - Plot results
+
+plt.plot(range(1, l+1), noise_powers, label="noise_powers")
+
+# Prime markers
+prime_x = []
+prime_y = []
+
+for k in range(1, l+1):
+    if isprime(k):
+        prime_x.append(k)
+        prime_y.append(noise_powers[k-1])
+
+plt.scatter(prime_x, prime_y, color='red', s=15, label='prime k')
+
+plt.legend()
+plt.show()
