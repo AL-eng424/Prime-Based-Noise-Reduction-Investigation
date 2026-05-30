@@ -1,0 +1,127 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sympy import isprime
+
+'''GLOBAL VARIABLES'''
+
+l = 360 # Encoded signal loop length
+n = 25 # Number of retransmissions
+T_signal = 79 # Signal period
+T_noise = 15 # Noise period
+nyquist_limit = int(T_signal / 2)
+
+'''FUNCTIONS'''
+
+def make_signal(t, T):
+    return np.sin(2*np.pi*t/T)
+
+def noise(signal, T):
+    t = np.arange(len(signal))
+    return np.sin(2*np.pi*t/T - T/2)
+
+def sample(noisy_signal, w):
+    samples = noisy_signal[::w]
+    t = np.arange(len(noisy_signal))
+    t_samples = t[::w]
+    return np.interp(t, t_samples, samples)
+
+def sample_and_reconstruct(noisy_signal, w, amplitude):
+    # Sampling and averaging
+    chunks = sample(noisy_signal, w).reshape(n, l)
+    reconstructed = np.mean(chunks, axis=0)
+
+    # # Error corrections
+    # t = np.arange(len(reconstructed))
+    # best_fit = np.polyfit(t, reconstructed, 1)
+    # reconstructed -= best_fit[0] * t # Correct tilt
+
+    # reconstructed_origin = (np.max(reconstructed) + np.min(reconstructed)) / 2
+    # reconstructed -= reconstructed_origin # Correct origin
+    
+    # reconstructed_amplitude = (np.max(reconstructed) - np.min(reconstructed)) / 2
+    
+    # if reconstructed_amplitude != 0:
+    #     reconstructed *= amplitude / reconstructed_amplitude # Correct amplitude
+
+    return chunks, reconstructed
+
+'''MAIN'''
+
+# 1 - Prepare signal for transmission
+
+t = np.arange(l) # Time vector
+signal = make_signal(t, T_signal)
+repeated_signal = np.tile(signal, n)
+noisy_signal = repeated_signal + noise(repeated_signal, T_noise)
+
+# 2 - Receive and decode signal, interactive plot
+
+plt.ion()
+fig, ax = plt.subplots()
+
+w_ceiling = l # Max sampling window
+noise_powers = np.array([])
+
+for w in range(1, w_ceiling):
+    # Clear previous frame
+    ax.clear()
+
+    chunks, reconstructed = sample_and_reconstruct(noisy_signal, w, amplitude=1)
+
+    noise_power = np.mean((reconstructed - signal) ** 2)
+    print(noise_power)
+
+    noise_powers = np.append(noise_powers, noise_power)
+
+    # Replot
+    ax.plot(t, reconstructed, label=f"w = {w}")
+    
+    # Transpose chunks (.T) to plot all at once
+    ax.plot(t, np.asarray(chunks).T, color='gray', alpha=0.3)
+
+
+    ax.plot(t, signal, label="original signal", linestyle='dashed')
+    ax.plot(t, noisy_signal[:l], label="noisy signal", linestyle='dotted')
+
+    ax.legend(loc="upper right")
+
+    # Redraw figure
+    plt.draw()
+
+    # Tiny pause so GUI updates
+    plt.pause(0.01)
+
+plt.ioff()
+plt.show()
+
+# 3 - Plot overall results
+
+plt.plot(range(1, w_ceiling), noise_powers, label="noise_powers")
+
+# Prime markers
+prime_x = []
+prime_y = []
+
+for w in range(1, w_ceiling):
+    if isprime(w):
+        prime_x.append(w)
+        prime_y.append(noise_powers[w-1])
+
+# Composite markers
+composite_x = []
+composite_y = []
+
+for w in range(1, w_ceiling):
+    if not isprime(w) and w % 15 == 0:
+        composite_x.append(w)
+        composite_y.append(noise_powers[w-1])
+
+plt.scatter(prime_x, prime_y, color='red', s=15, label='prime w')
+plt.scatter(composite_x, composite_y, color='blue', s=15, label='multiples of noise period')
+plt.scatter(nyquist_limit, noise_powers[nyquist_limit-1], marker='x', color='green', s=100, label='nyquist limit')
+# plt.plot(label=f"l (signal length) = {l}")
+# plt.plot(label=f"T_signal (signal period) = {T_signal}")
+# plt.plot(label=f"T_noise (noise period) = {T_noise}")
+
+plt.legend()
+plt.show()
