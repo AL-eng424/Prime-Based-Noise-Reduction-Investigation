@@ -3,19 +3,20 @@ import matplotlib.pyplot as plt
 from sympy import isprime
 
 '''GLOBAL VARIABLES'''
+analysis_data = open('Analysis_Data', 'w')
 
 l = 360 # Encoded signal loop length
 n = 25 # Number of retransmissions
-T_signal = 79 # Signal period
-T_noise = 15 # Noise period
+T_signal = 72 # Signal period
+T_noise = 12 # Noise period
 nyquist_limit = int(T_signal / 2)
 
 '''FUNCTIONS'''
 
 def make_signal(t, T):
-    return np.sin(2*np.pi*t/T)
+    return np.sin(2*np.pi*t/T) # You can change this to your own signal function, ensure you use fixed length t
 
-def noise(signal, T):
+def noise(signal, T): # You can create own noise function, ensure periodic &  small T
     t = np.arange(len(signal))
     return np.sin(2*np.pi*t/T - T/2)
 
@@ -68,20 +69,21 @@ for w in range(1, w_ceiling):
 
     chunks, reconstructed = sample_and_reconstruct(noisy_signal, w, amplitude=1)
 
-    noise_power = np.mean((reconstructed - signal) ** 2)
+    noise_power = np.mean((reconstructed - signal) ** 2) # Calculating noise power
     print(noise_power)
+
+    # You can do the exact same for other analyses.
 
     noise_powers = np.append(noise_powers, noise_power)
 
-    # Replot
-    ax.plot(t, reconstructed, label=f"w = {w}")
-    
     # Transpose chunks (.T) to plot all at once
-    ax.plot(t, np.asarray(chunks).T, color='gray', alpha=0.3)
+    ax.plot(t, np.asarray(chunks).T, color='gray', alpha=0.1)
+   
+    # ax.plot(t, signal, label="original signal", linestyle='dashed', color='blue')
+    ax.plot(t, noisy_signal[:l], label="noisy signal",  color='purple')
 
-
-    ax.plot(t, signal, label="original signal", linestyle='dashed')
-    ax.plot(t, noisy_signal[:l], label="noisy signal", linestyle='dotted')
+    # Replot
+    ax.plot(t, reconstructed, label=f"w = {w}", linestyle='dashed', color='orange', alpha=1)
 
     ax.legend(loc="upper right")
 
@@ -90,13 +92,20 @@ for w in range(1, w_ceiling):
 
     # Tiny pause so GUI updates
     plt.pause(0.01)
+    
+    # if w == 1:
+    #     plt.pause(10)
+    #     input('Press enter to continue... ')
+
+    analysis_data.write(f"Sample Window = {w}\nMean Square Error = {noise_power}\nReconstructed Signal = {reconstructed}\n\n")
 
 plt.ioff()
 plt.show()
+analysis_data.close()
 
 # 3 - Plot overall results
 
-plt.plot(range(1, w_ceiling), noise_powers, label="noise_powers")
+plt.plot(range(1, w_ceiling), noise_powers, label="noise_powers", color='gray')
 
 # Prime markers
 prime_x = []
@@ -112,7 +121,7 @@ composite_x = []
 composite_y = []
 
 for w in range(1, w_ceiling):
-    if not isprime(w) and w % 15 == 0:
+    if not isprime(w) and w % 12 == 0:
         composite_x.append(w)
         composite_y.append(noise_powers[w-1])
 
