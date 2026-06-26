@@ -1,7 +1,9 @@
+
 import numpy as np
 import matplotlib.pyplot as plt
 from sympy import isprime
-from scipy.interpolate import CubicSpline # Redundant
+from scipy.interpolate import CubicSpline # Might be redundant
+from scipy.interpolate import interp1d # Might be redundant
 from scipy.fft import rfft, rfftfreq
 
 # Global Variables, to easily change parameters
@@ -14,15 +16,20 @@ global n_components
 global target_power
 global option
 global alpha
+global Sin_freq
 
-T = 5.0 # Time
+Gen_opt = 2 # (1 is SLFS) (2 is simple Sinusoid)
+# 1
+T = 5 # Time
 fs_cont = 10000 # Uniform sampling rate (before sampling is applied)
-f_max = 20 # Max frequency
-min_freq = 1 # Minimum frequency, lowest it can be is 1/T
-n_components = 50 # The number of sinusoids used to generate a signal
+f_max = 50 # Max frequency
+min_freq = 1 / T #Minimum frequency, lowest it can be is 1/T
+n_components = 100 # The number of sinusoids used to generate a signal
 target_power = 1 # The target power of the signal
 option = 2 #Option for generating signal 1 = flat amplitudes, 2 = spectral decay
-alpha = 1.5
+alpha = 1.3
+# 2
+Sin_freq = 5
 
 # Noise injection
 global frequency
@@ -35,8 +42,8 @@ global num_sin
 global target_noise_power
 
 noise_opt = 1 # (0 = L_f_s noise) (1 = H_f_s noise) (2 = M_t_s noise) (3 = w_g noise)
-frequency = 40 # Frequency for L_f_s, H_f_s # MUST BE A FACTOR OF FS_CONT
-amplitude = 0.2 # Amplitude for L_f_s, H_f_s, w_g
+frequency = 45.5 # Frequency for L_f_s, H_f_s 
+amplitude = 0.2 # Amplitude for L_f_s, H_f_s, w_g Basically Redunant
 
 # Multi-tone sin
 amplitude_min = 0.2
@@ -46,14 +53,14 @@ frequency_max = 30
 num_sin = 3 # Number of sin waves added
 
 # Target noise power
-target_noise_power = 0.01
+target_noise_power = 0.02
 
 # Sampling
 global fs_sample
 global min_fs
 global max_fs
 
-sample_option = 4 #(0 =  Uniform sampling) (1 =  Random sampling) (2 = Random interval sampling) (3 = P_M_A_F_CS) (4 = P_M_A_F_LI )
+sample_option = 4 #(0 =  Uniform sampling) (1 =  Random sampling) (2 = Random interval sampling) (3 = Welch_PMAF) (4 = P_M_A_F_LI )
 # Need to be above the Niquist frequency
 fs_sample = 2000 # Sampling rate for Uniform and Random sampling
 min_fs = 1000 # Minimum sampling rate for Random interval sampling
@@ -62,14 +69,34 @@ max_fs = 3000 # Maximum sampling rate for Random interval sampling
 # PMAF specific sampling
 global w
 global n
+global nperseg
+global overlap
 
-w = 13
-n = 25
+w = 150
+n = 25 # PMAF (number of transmissions)
+nperseg = 1024
+overlap = 0.5
 
 # 1. Generate continuous signal, using sum of low frequency sinusoids
+
+def generate_sin_signal():
+    t = np.linspace(0, T, int(T * fs_cont), endpoint = False)
+
+    signal = np.sin(2 * np.pi * Sin_freq * t)
+
+    # Normalise signal power
+    current_power = np.mean(signal**2)
+    signal *= np.sqrt(target_power / current_power)
+    current_power = np.mean(signal**2)
+
+    frequencies = [Sin_freq]
+
+    return t, signal, current_power, frequencies
+    
+
 def generate_signal():
     
-    t = np.linspace(0, T, int(T*fs_cont), endpoint=False)
+    t = np.linspace(0, T, int(T * fs_cont), endpoint=False)
 
     frequencies = np.random.uniform(min_freq , f_max, n_components)
     phases = np.random.uniform(0, 2*np.pi, n_components)
@@ -79,7 +106,7 @@ def generate_signal():
         amplitudes = np.random.uniform(0.5, 1.0, n_components)
 
     elif option ==2:
-        # Slight randomness to avoid perfectly deterministic structure
+    # Spectral decay
         decay_factor = frequencies ** alpha
         amplitudes = np.random.uniform(0.9, 1.1, n_components) / decay_factor
 
@@ -128,7 +155,7 @@ def NUDFT_reconstruction(signal, t, frequencies, return_phase=False):
         return magnitude
 
 def FFT_reconstruction(signal):
-    len_signal = int(T * fs_cont)
+    len_signal = len(signal)
 
     X = rfft(signal)
 
@@ -141,7 +168,6 @@ def FFT_reconstruction(signal):
 
 
     return magnitude[mask], freq[mask], X[mask]
-    
 
 # 3. Defining noise
 def low_freq_sin_noise(t):
@@ -204,17 +230,34 @@ def white_gaussian_noise(t):
 
 # 4. Sampling
 #  Prime Average Sampling
-#def Welch_PMAF(noisy_signal):
-    
+# This doesn't work
+def Welch_PMAF_Reconstruct(noisy_signal):
+    step = int(nperseg * (1 - overlap))
+    window = np.hanning(nperseg)
 
+    P = None
+    count = 0
+
+    for start in range(0, len(signal)-nperseg, step):
+        seg = signal[start:start+nperseg] * window
+        X = np.fft.rfft(seg)
+
+        power = np.abs(X)**2
+
+        if P is None:
+            P = power
+        else:
+            P += power
+
+        count += 1
+
+    return P / count
+    
 
 # This will bias upward in Coherence analysis
-def P_M_A_F_LI(noisy_signal):
-    repeated_signal = np.tile(noisy_signal, n)
+def P_M_A_F_LI(noisy_signal, t_full, repeated_signal):
 
-    t_full = np.linspace(0, n * T, len(repeated_signal), endpoint = False)
-    
-    samples = repeated_signal[::w]
+    samples = noisy_signal[::w]
     t_samples = t_full[::w]
     interp = np.interp(t_full, t_samples, samples)
 
@@ -291,7 +334,7 @@ def Random_interval_sampling(noisy_signal, t):
     return sampled_signal, sampled_t, indicies, average_fs
     
 # 5. Analysis
-def Welch_Coherence(x, y, nperseg=1024, noverlap=512):
+def Welch_Coherence(x, y, nperseg = 32768, noverlap = 16384): 
     
     x = np.asarray(x)
     y = np.asarray(y)
@@ -363,7 +406,7 @@ def graph_Csignal_Mspec (t, signal, X_freq, X_mag):
     # Plot Magnitude Spectrum
     plt.figure(figsize=(20, 4))
     plt.plot(X_freq, X_mag)
-    plt.title("NUDFT Magnitude Spectrum")
+    plt.title("FFT Magnitude Spectrum")
     plt.xlabel("Frequency (Hz)")
     plt.ylabel("Magnitude (Amplitude)")
     plt.xticks(np.arange(0, 51, 1))
@@ -393,7 +436,7 @@ def graph_noisy_vsignal (t, signal, noisy_signal, X_freq, Y_freq, X_mag, Y_mag):
     plt.plot(X_freq, X_mag, "r", label = "Original Magnitude Spectrum")
     plt.plot(Y_freq, Y_mag, "b", label = "Noisy Magnitude Spectrum")
     plt.legend()
-    plt.title("NUDFT Magnitude Spectrum (Frequency Domain)")
+    plt.title("FFT Magnitude Spectrum (Frequency Domain)")
     plt.xlabel("Frequency (Hz)")
     plt.ylabel("Magnitude (Amplitude)")
     plt.xticks(np.arange(0, 51, 1))
@@ -419,13 +462,28 @@ def graph_Ssignal_Mspec_FFT (sampled_signal, t,
     plt.tight_layout()
     plt.show()
 
-    # Plot Sampled Signal v Original Signal
-    plt.figure(figsize = (20, 4))
-    plt.plot(t, sampled_signal, "r", label = "Sampled Signal")
-    plt.plot(t, signal, "b", label = "Original Signal")
+    # Plot Sampled Signal v Original Signal v Noisy Signal
+    plt.figure(figsize = (20,4))
+    plt.plot(t, sampled_signal, color = "orange", label = "Sampled Signal")
+    plt.plot(t, signal, color = "blue", label = "Original Signal")
     plt.legend()
     plt.title("Sampled Signal vs Original Signal")
-    plt.xlabel("Amplitude")
+    plt.xlabel("Time")
+    plt.ylabel("Amplitdue")
+
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+    
+    # Plot Sampled Signal v Original Signal v Noisy Signal
+    plt.figure(figsize = (20,4))
+    plt.plot(t, sampled_signal, color = "orange", label = "Sampled Signal")
+    plt.plot(t, signal, color = "blue", label = "Original Signal")
+    plt.plot(t, noisy_signal, linestyle = "dashed", color = "purple", label = "Noisy Signal")
+    plt.legend()
+    plt.title("Sampled Signal vs Original Signal")
+    plt.xlabel("Time")
+    plt.ylabel("Amplitdue")
 
     plt.grid(True)
     plt.tight_layout()
@@ -514,30 +572,51 @@ def graph_Ssignal_Mspec (sampled_t, sampled_signal, t,
     plt.tight_layout()
     plt.show()
 
-    
-def Coherence_plot(Cxy, frequencies, noise_freq, Co_opt):
-    plt.figure(figsize=(20,4))
-    plt.plot(frequencies, Cxy, label="Coherence Cxy(f)")
-    
-    plt.title("Coherence between Original and Sampled Signal")
-    plt.xlabel("Frequency (Hz)")
-    plt.ylabel("Cxy(f) (0 - 1)")
-    plt.xticks(np.arange(0,51,5))
-    plt.yticks(np.arange(0,1.2,0.2))
-    plt.grid(True)
 
-    # Make sure noise_freq is iterable
+def Coherence_plot(Cxy_s, Cxy_n, frequencies_1, frequencies_2, noise_freq, Co_opt):
     if np.isscalar(noise_freq):
         noise_freq = [noise_freq]
 
-    # Plot noise lines
+    # 1. Create a figure with 2 rows and 1 column of subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(20, 8))
+
+    # --- FIRST SUBPLOT (Original vs Sampled) ---
+    ax1.plot(frequencies_1, Cxy_s, color="b", label="Coherence Cxy(f) Original vs Sampled")
+    ax1.set_title("Coherence between Original and Sampled Signal")
+    ax1.set_xlabel("Frequency (Hz)")
+    ax1.set_ylabel("Cxy(f) (0 - 1)")
+    ax1.set_xticks(np.arange(0, 51, 5))
+    ax1.set_yticks(np.arange(0, 1.4, 0.2))
+    ax1.grid(True)
+
+    # Plot noise lines on the first subplot
     for i, f in enumerate(noise_freq):
         if i == 0:
-            plt.axvline(f, color='r', linestyle='--', label=f"Injected Noise: {', '.join(map(str, noise_freq))} Hz")
+            ax1.axvline(f, color='r', linestyle='--', label=f"Injected Noise: {', '.join(map(str, noise_freq))} Hz")
         else:
-            plt.axvline(f, color='r', linestyle='--')
+            ax1.axvline(f, color='r', linestyle='--')
+    ax1.legend()
 
-    plt.legend()
+
+    # --- SECOND SUBPLOT (Original vs Noisy) ---
+    ax2.plot(frequencies_2, Cxy_n, color="r", label="Coherence Cxy(f) Original vs Noisy")
+    ax2.set_title("Coherence between Original and Noisy Signal")
+    ax2.set_xlabel("Frequency (Hz)")
+    ax2.set_ylabel("Cxy(f) (0 - 1)")
+    ax2.set_xticks(np.arange(0, 51, 5))
+    ax2.set_yticks(np.arange(0, 1.4, 0.2))
+    ax2.grid(True)
+
+    # Plot noise lines on the second subplot
+    for i, f in enumerate(noise_freq):
+        if i == 0:
+            ax2.axvline(f, color='r', linestyle='--', label=f"Injected Noise: {', '.join(map(str, noise_freq))} Hz")
+        else:
+            ax2.axvline(f, color='r', linestyle='--')
+    ax2.legend()
+
+
+    # 2. Adjust spacing and display the combined figure
     plt.tight_layout()
     plt.show()
 
@@ -549,13 +628,17 @@ def Coherence_plot(Cxy, frequencies, noise_freq, Co_opt):
 
 
 # Generate Signal
-t, signal, current_power, frequencies = generate_signal() # Never actually use frequencies so get rid of it?
+if Gen_opt == 1:
+    t, signal, current_power, frequencies = generate_signal()
 
-# Frequency grid for NUDFT
-# Old code frequency_grid = np.linspace(0, 50, 3000)
+else:
+    t, signal, current_power, frequencies = generate_sin_signal()
+
+if sample_option == 4:
+    repeated_signal = np.tile(signal, n)
+    t_full = np.arange(len(repeated_signal)) / fs_cont
 
 # Compute Spectrum
-#old code X = NUDFT_reconstruction(signal, t, frequency_grid)
 X_mag, X_freq, X = FFT_reconstruction(signal)
 
 # Call Graph for continuous signal and Magnitude spectrum
@@ -566,47 +649,66 @@ current_power = round(current_power, 5)
 print("The power level in original signal is:", current_power)
 
 # Option for noise injection
-noisy_signal = signal.copy()
+if sample_option == 4:
+    noisy_signal = repeated_signal.copy()
+
+else:
+    noisy_signal = signal.copy()
 
 if noise_opt == 0:
 # Recommended: amplitude 0.2-0.4, frequency 0.5-1
-    noise, _  = low_freq_sin_noise(t)
-    noisy_signal += noise
+    if sample_option == 4:
+        noise, _ = low_freq_sin_noise(t_full)
+    else:
+        noise, _  = low_freq_sin_noise(t)
 
+    noisy_signal += noise
     frequencies = np.append(frequencies, frequency)
 
 elif noise_opt == 1:
 # Recommended: amplitude 0.2-0.4, frequency 25-40
-    noise, _ = high_freq_sin_noise(t)
-    noisy_signal += noise
+    if  sample_option == 4:
+        noise, _ = high_freq_sin_noise(t_full)
 
+    else:
+        noise, _ = high_freq_sin_noise(t)
+
+    noisy_signal += noise
     frequencies = np.append(frequencies, frequency)
 
 elif noise_opt == 2:
 # Recommended: amplitude (min = 0.2, max = 0.4) frequency (abs min = 1 / T, abs max = 1/2 * fs_cont)
-    noise, _, noise_frequencies = multi_tone_sin_noise(t)
-    noisy_signal += noise
+    if sample_option == 4:
+        noise, _, noise_frequencies = multi_tone_sin_noise(t_full)
+    else:
+        noise, _, noise_frequencies = multi_tone_sin_noise(t)
 
+    noisy_signal += noise
     frequencies = np.concatenate((frequencies, noise_frequencies))
-    
+
 elif noise_opt == 3:
     # Recommended: amplitude = 0.2
+    if sample_option == 4:
+            noise, _ = white_gaussian_noise(t_full)
 
-    noise, _ = white_gaussian_noise(t, amplitude, target_noise_power)
+    else:
+        noise, _ = white_gaussian_noise(t)
     noisy_signal += noise
 
-# Frequency grid for NUDFT
-# Old code frequency_grid = np.linspace(0, 50, 3000)
+if sample_option == 4:
+    noisy_signal_analysis = noisy_signal [:len(signal)]
 
+else:
+    noisy_signal_analysis = noisy_signal
+    
 # Compute Spectrum (called Y so can use X later on)
-# Old code Y = NUDFT_reconstruction(noisy_signal, t, frequency_grid)
-Y_mag, Y_freq, _ = FFT_reconstruction(noisy_signal)
+Y_mag, Y_freq, _ = FFT_reconstruction(noisy_signal_analysis)
 
 # Call Graph for noisy signal and Magnitude spectrum
-graph_noisy_vsignal (t, signal, noisy_signal, X_freq, Y_freq, X_mag, Y_mag)
+graph_noisy_vsignal (t, signal, noisy_signal_analysis, X_freq, Y_freq, X_mag, Y_mag)
 
 # Working out and printing the relative noise power
-relative_noise_power = np.mean((noisy_signal - signal) **2) / np.mean(signal ** 2)
+relative_noise_power = np.mean((noisy_signal_analysis - signal) **2) / np.mean(signal ** 2)
 print("The relative noise power before sampling is:", round(relative_noise_power, 5))
 
 # Working out the noise level from the power ratio of noisy signal to signal
@@ -614,10 +716,10 @@ noise_db = 10 *np.log10(relative_noise_power)
 print("Relative noise level before sampling is:", round(noise_db, 5), "dB")
 
 # Working out and printing the noise power and current signal power
-noise_power = np.mean((signal - noisy_signal) ** 2)
+noise_power = np.mean((signal - noisy_signal_analysis) ** 2)
 print("The power in the noise is before sampling is:", round(noise_power, 5))
       
-noisy_signal_power = np.mean(noisy_signal ** 2)
+noisy_signal_power = np.mean(noisy_signal_analysis ** 2)
 print("The current noisy signal power is:", round(noisy_signal_power, 5))
 
 # Sampling
@@ -633,10 +735,10 @@ elif sample_option == 2:
     print("The average sampling rate is:", average_fs)
 
 elif sample_option == 3:
-    sampled_signal = Welch_PMAF(noisy_signal)
+    sampled_signal = Welch_PMAF_Reconstruct(noisy_signal)
 
 elif sample_option == 4:
-    sampled_signal = P_M_A_F_LI(noisy_signal)
+    sampled_signal = P_M_A_F_LI(noisy_signal, t_full, repeated_signal)
     
 # If not PMAF
 if sample_option != 3 and sample_option != 4:
@@ -660,12 +762,11 @@ if sample_option != 3 and sample_option != 4:
 # If PMAF / Welch style PMAF
 elif sample_option == 3 or sample_option == 4:
         # FFT of sampled signal
-    # Old codefrequency_grid = np.linspace(0, 50, 3000)
-    # Old code Z = NUDFT_reconstruction(sampled_signal, t, frequency_grid)
+
     Z_mag, Z_freq, Z = FFT_reconstruction(sampled_signal)
     # Matplotlib comparing sampled signal to original signal to noisy signal
     graph_Ssignal_Mspec_FFT (sampled_signal, t,
-                                    noisy_signal, signal, Y_freq, Z_freq, X_freq, Y_mag, Z_mag, X_mag)
+                                    noisy_signal_analysis, signal, Y_freq, Z_freq, X_freq, Y_mag, Z_mag, X_mag)
 
     # Work out the sampled noise and percentage reduction
     sampled_power = np.mean(sampled_signal ** 2)
@@ -682,24 +783,26 @@ elif sample_option == 3 or sample_option == 4:
     noise_floor = noise_power/ n
 
     # Works out how much noise it was possible to reduce and prints a percentage of 
-    possible_noise_reduction = 100 *((noise_power - sampled_noise_power) / (noise_power - noise_floor))
+    possible_noise_reduction = 100 * ((noise_power - sampled_noise_power) / (noise_power - noise_floor))
     print("Percentage of noise removed compared to noise that was possible to remove is:", str((round(possible_noise_reduction, 3))) + "%")
 
 # Coherence analysis
-# Need to work out scaling for NUDFT APSD coeficients (scaled by dt / T)
-
 if sample_option == 3 or sample_option == 4:
-    freqs, Cxy = Welch_Coherence(signal, sampled_signal)
+    freqs_1, Cxy_s = Welch_Coherence(signal, sampled_signal)
+    freqs_2, Cxy_n = Welch_Coherence(signal, noisy_signal_analysis)
 
 
     if noise_opt == 2:
             Co_opt = 1
-            Coherence_plot(Cxy, freqs, noise_frequencies, Co_opt)
+            Coherence_plot(Cxy_s, Cxy_n, freqs_1, freqs_2, noise_frequencies, Co_opt)
 
     else:
+        noise_frequencies = [frequency]
         Co_opt = 2
-        Coherence_plot(Cxy, freqs,  frequency, Co_opt)
+        Coherence_plot(Cxy_s, Cxy_n, freqs_1, freqs_2, noise_frequencies, Co_opt)
     
     
 elif sample_option != 3 and sample_option != 4:
     print("You still need to do the NUDFT branch of Coherence")
+
+#print(frequencies)
