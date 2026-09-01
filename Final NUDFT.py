@@ -1,4 +1,3 @@
-
 import numpy as np
 import matplotlib.pyplot as plt
 from sympy import isprime
@@ -18,7 +17,7 @@ global option
 global alpha
 global Sin_freq
 
-Gen_opt = 2 # (1 is SLFS) (2 is simple Sinusoid)
+Gen_opt = 1 # (1 is SLFS) (2 is simple Sinusoid)
 # 1
 T = 5 # Time
 fs_cont = 10000 # Uniform sampling rate (before sampling is applied)
@@ -41,9 +40,9 @@ global amplitude_max
 global num_sin
 global target_noise_power
 
-noise_opt = 1 # (0 = L_f_s noise) (1 = H_f_s noise) (2 = M_t_s noise) (3 = w_g noise)
-frequency = 45.5 # Frequency for L_f_s, H_f_s 
-amplitude = 0.2 # Amplitude for L_f_s, H_f_s, w_g Basically Redunant
+noise_opt = 2 # (0 = L_f_s noise) (1 = H_f_s noise) (2 = M_t_s noise) (3 = w_g noise)
+frequency = 30 # Frequency for L_f_s, H_f_s 
+amplitude = 1 # Amplitude for L_f_s, H_f_s, w_g Basically Redunant
 
 # Multi-tone sin
 amplitude_min = 0.2
@@ -72,7 +71,7 @@ global n
 global nperseg
 global overlap
 
-w = 150
+w = 31
 n = 25 # PMAF (number of transmissions)
 nperseg = 1024
 overlap = 0.5
@@ -334,7 +333,7 @@ def Random_interval_sampling(noisy_signal, t):
     return sampled_signal, sampled_t, indicies, average_fs
     
 # 5. Analysis
-def Welch_Coherence(x, y, nperseg = 32768, noverlap = 16384): 
+def Welch_Coherence(x, y, nperseg = 32768 , noverlap = 16384): 
     
     x = np.asarray(x)
     y = np.asarray(y)
